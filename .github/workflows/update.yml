@@ -47,7 +47,7 @@ jobs:
           latestver = html.find("a", string=re.compile("MicrosoftCorporationII\.WindowsSubsystemForAndroid_.*\.msixbundle")).text
           latestver = latestver.replace('MicrosoftCorporationII.WindowsSubsystemForAndroid_', '')
           latestver = latestver.replace('_neutral_~_8wekyb3d8bbwe.msixbundle', '')
-          currentver = requests.get(f"https://raw.githubusercontent.com/YT-Advanced/WSA-Script/update/wsa.appversion").text
+          currentver = requests.get(f"https://raw.githubusercontent.com/WellCodeIsDelicious/WSATest/update/wsa.appversion").text
           latestver = latestver.replace('\n', '')
           currentver = currentver.replace('\n', '')
           build = False
@@ -59,26 +59,46 @@ jobs:
           file.write(latestver)
           file.close()
           print("Check WSA Insider Version")
-          currentver = requests.get(f"https://raw.githubusercontent.com/YT-Advanced/WSA-Script/update/WIF.appversion").text
+          currentver = requests.get(f"https://raw.githubusercontent.com/WellCodeIsDelicious/WSATest/update/WIF.appversion").text
           latestver = json.loads(requests.get(f"https://api.github.com/repos/bubbles-wow/WSA-Archive/releases/latest").content)['tag_name']
           latestver = latestver.replace('\n', '')
           currentver = currentver.replace('\n', '')
           if currentver != latestver:
               build = True
               insider = "yes"
-              msg="Update WSA Insider Version from `v" + currentver + "` to `v" + latestver + "`"
+              msg="Update WSA Version from `v" + currentver + "` to `v" + latestver + "`"
           file = open('WIF.appversion', 'w')
           file.write(latestver)
           file.close()
           print("Check Magisk Stable Version")
-          currentver = requests.get(f"https://raw.githubusercontent.com/YT-Advanced/WSA-Script/update/magisk.appversion").text
+          currentver = requests.get(f"https://raw.githubusercontent.com/WellCodeIsDelicious/WSATest/update/magiskstable.appversion").text
           latestver = json.loads(requests.get(f"https://github.com/topjohnwu/magisk-files/raw/master/stable.json").content)['magisk']['version']
           latestver = latestver.replace('\n', '')
           currentver = currentver.replace('\n', '')
           if currentver != latestver:
-              build = True
-              msg="Update Magisk Version from `v" + currentver + "` to `v" + latestver + "`"
-          file = open('magisk.appversion', 'w')
+              build = False
+          file = open('magiskstable.appversion', 'w')
+          file.write(latestver)
+          file.close()
+          print("Check Magisk Canary Version")
+          currentver = requests.get(f"https://raw.githubusercontent.com/WellCodeIsDelicious/WSATest/update/magiskcanary.appversion").text
+          latestver = json.loads(requests.get(f"https://github.com/topjohnwu/magisk-files/raw/master/canary.json").content)['magisk']['version']
+          latestver = latestver.replace('\n', '')
+          currentver = currentver.replace('\n', '')
+          if currentver != latestver:
+              build = False
+          file = open('magiskcanary.appversion', 'w')
+          file.write(latestver)
+          file.close()
+          print("Check KernelSU Version")
+          latestver = json.loads(requests.get(f"https://api.github.com/repos/tiann/kernelsu/releases/latest").content)['tag_name']
+          latestver = latestver.replace('v', '')
+          latestver = latestver.replace('\n', '')
+          currentver = requests.get(f"https://raw.githubusercontent.com/WellCodeIsDelicious/WSATest/update/kernelsu.appversion").text
+          currentver = currentver.replace('\n', '')
+          if currentver != latestver:
+              build = False
+          file = open('kernelsu.appversion', 'w')
           file.write(latestver)
           file.close()
           print("Check MindTheGapps Version")
@@ -87,8 +107,7 @@ jobs:
           latestver = latestver.replace('\n', '')
           currentver = currentver.replace('\n', '')
           if currentver != latestver:
-              build = True
-              msg="Update MindTheGapps Version from `v" + currentver + "` to `v" + latestver + "`"
+              build = False
           file = open('gapps.appversion', 'w')
           file.write(latestver)
           file.close()
@@ -98,45 +117,15 @@ jobs:
           else:
               with open(env_file, "a") as wr:
                   wr.write("SHOULD_BUILD=no")
-
+                  
       - name: Update App version 🔗
         uses: stefanzweifel/git-auto-commit-action@v4.16.0
-        if: env.SHOULD_BUILD == 'yes'
         with:
           branch: update
           push_options: '--force'
           file_pattern: '*.appversion'
-          commit_message: ${{ env.MSG }}
+          commit_message: ${{ env.MSG || 'Update App Version' }}
           create_branch: true
-
-      - name: Prepare release tag 🏷️
-        if: env.SHOULD_BUILD == 'yes'
-        id: date
-        shell: bash
-        run: |
-           if [[ -z "${{ env.INSIDER }}" ]]; then
-              echo "date=$(date +'v%Y-%m-%d')" >> $GITHUB_OUTPUT
-              echo "prerls=false" >> $GITHUB_OUTPUT
-           else
-              echo "date=WSA-Insider-Version" >> $GITHUB_OUTPUT
-              echo "prerls=true" >> $GITHUB_OUTPUT
-            fi
-
-      - name: Delete Tag (if exist) ❌
-        if: steps.date.outputs.date == 'WSA-Insider-Version'
-        uses: dev-drprasad/delete-tag-and-release@v1.0.1
-        with:
-          tag_name: ${{ steps.date.outputs.date }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Add text format to release 📝
-        if: env.SHOULD_BUILD == 'yes'
-        uses: softprops/action-gh-release@v0.1.15
-        with:
-          tag_name: ${{ steps.date.outputs.date }}
-          body: "# Changelog\n## ${{ env.MSG }}\n### SHA256 Checksum\n```"
-          prerelease: ${{ steps.date.outputs.prerls }}
-          draft: false
 
       - name: Delete old workflow run ❌
         uses: Mattraks/delete-workflow-runs@v2
@@ -147,24 +136,116 @@ jobs:
           keep_minimum_runs: 0
           delete_workflow_pattern: "Check update"
 
+      - name: Checkout Again! 🔄
+        uses: actions/checkout@v3
+
     outputs:
       SHOULD_BUILD: ${{ env.SHOULD_BUILD }}
       INSIDER_BUILD: ${{ env.INSIDER }}
+      WSA_UPDATE_MESSAGE: ${{ env.MSG }}
 
-  build:
-    name: ${{ matrix.arch }}-${{ matrix.root }}-${{ matrix.gapps }}-${{ inputs.insider }} # 'insider' is 'yes' or 'no'
-    strategy:
-      matrix:
-        arch: [x64, arm64]
-        root: [magisk, kernelsu, none]
-        gapps: [MindTheGapps, none]
+  check-and-create-tag:
+    name: Creates the release tags
+    needs: [check]
+    if: needs.check.outputs.SHOULD_BUILD == 'yes'
+    runs-on: ubuntu-latest
+    steps:
+    
+      - name: List Variable 🔗
+        run: |
+            echo ${{ needs.check.outputs.WSA_UPDATE_MESSAGE }}
+            echo ${{ needs.check.outputs.INSIDER_BUILD }}
+            echo ${{ needs.check.outputs.SHOULD_BUILD }}
+            
+      - name: Prepare release tag 🏷️
+        id: releasetag
+        shell: bash
+        run: |
+          if [[ -z "${{ needs.check.outputs.INSIDER_BUILD }}" ]]; then
+            currentver=$(curl -O https://raw.githubusercontent.com/WellCodeIsDelicious/WSATest/update/wsa.appversion && cat wsa.appversion)
+            echo "currentver: $currentver"
+            echo "WSA_VER=$currentver" >> $GITHUB_ENV
+            echo "WIN11X64_TAG=Windows_11_$currentver" >> $GITHUB_ENV
+            echo "WIN11ARM64_TAG=Windows_11_$currentver_arm64" >> $GITHUB_ENV
+            echo "WIN10X64_TAG=Windows_11_$currentver" >> $GITHUB_ENV
+          else
+            currentver=$(curl -O https://raw.githubusercontent.com/WellCodeIsDelicious/WSATest/update/WIF.appversion && cat WIF.appversion)
+            echo "currentver: $currentver"
+            echo "WSA_VER=$currentver" >> $GITHUB_ENV
+            echo "WIN11X64_TAG=Windows_11_$currentver" >> $GITHUB_ENV
+            echo "WIN11ARM64_TAG=Windows_11_$currentver_arm64" >> $GITHUB_ENV
+            echo "WIN10X64_TAG=Windows_11_$currentver" >> $GITHUB_ENV
+          fi
+          
+      - name: Run Tag Checks
+        uses: mukunku/tag-exists-action@v1.4.0
+        id: checkTag
+        with:
+          tag: ${{ env.WSA_TAG }}
+          repo: 'WellCodeIsDelicious/WSATest'
+      - run: echo ${{ steps.checkTag.outputs.exists }}
+      
+      - name: Stop workflow if tag exists
+        if: steps.checkTag.outputs.exists == 'true'
+        run: exit 1
+        
+      - name: Download Release Notes 📥
+        run: |
+          wget https://gist.github.com/MustardChef/edb0dfc50ab4942cd5914cef6a81602e/raw/fd3f2b06b94ceb0b959e0ebd57983b24fa704b47/Windows11x64.md -P ${{ github.workspace }} 
+          ls
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+          
+      - name: Obtain Magisk, KernelSU and MindTheGapps versions   
+        run: |
+            magiskstablever=$(curl -s https://raw.githubusercontent.com/WellCodeIsDelicious/WSATest/update/magiskstable.appversion)
+            magiskcanaryver=$(curl -s https://raw.githubusercontent.com/WellCodeIsDelicious/WSATest/update/magiskcanary.appversion)
+            kernelsuver=$(curl -s https://raw.githubusercontent.com/WellCodeIsDelicious/WSATest/update/kernelsu.appversion)
+            mtgver=$(curl -s https://raw.githubusercontent.com/WellCodeIsDelicious/WSATest/update/gapps.appversion)
+            echo "MAGISK_STABLE_VER=$magiskstablever" >> $GITHUB_ENV
+            echo "MAGISK_CANARY_VER=$magiskcanaryver" >> $GITHUB_ENV
+            echo "KERNELSU_VER=$kernelsuver" >> $GITHUB_ENV
+            echo "GAPPS_VER=$mtgver" >> $GITHUB_ENV
+            
+      - name: Update Release Notes 📝
+        run: |
+            cd 
+            sed -i "s/<<DATEOFRELEASE>>/$(date +%d-%m-%Y)/g" $GITHUB_WORKSPACE/Windows11x64.md
+            sed -i "s/<<TIMEOFRELEASE>>/$(date -u +%H:%M:%S)/g" $GITHUB_WORKSPACE/Windows11x64.md
+            sed -i "s/<<REASONFORRELEASE>>/Initial Release/g" $GITHUB_WORKSPACE/Windows11x64.md
+            sed -i "s/<<WSAUPDATEMSG>>/${{ needs.check.outputs.WSA_UPDATE_MESSAGE }}/g" $GITHUB_WORKSPACE/Windows11x64.md
+            sed -i "s/<<WSAANDROIDVERSION>>/Android 13/g" $GITHUB_WORKSPACE/Windows11x64.md
+            sed -i "s/<<MTGPACKAGENAME>>/${{ env.GAPPS_VER }}/g" $GITHUB_WORKSPACE/Windows11x64.md
+            sed -i "s/<<MAGISKCANARYVERSION>>/${{ env.MAGISK_CANARY_VER }}/g" $GITHUB_WORKSPACE/Windows11x64.md
+            sed -i "s/<<MAGISKSTABLEVERSION>>/${{ env.MAGISK_STABLE_VER }}/g" $GITHUB_WORKSPACE/Windows11x64.md
+            sed -i "s/<<KERNELSUVERSION>>/${{ env.KERNELSU_VER }}/g" $GITHUB_WORKSPACE/Windows11x64.md
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+          
+      - name: Create Tag and Release for Windows 11 x64 release ✍🏼
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ env.WIN11X64_TAG }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          body_path: ${{github.workspace}}/Windows11x64.md
+          name: Windows Subsystem For Android ${{ env.WSA_VER }} for Windows 11 x64
+          files: ${{github.workspace}}/Windows11x64.md
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+
+  build1:
+    name: Build 1 with x64, No Root, MindTheGapps, No Amazon Appstore and Pixel 5 Device Model 🏗️
     permissions: write-all
-    needs: check
-    uses: ./.github/workflows/build.yml
+    needs: [check-and-create-tag]
+    uses: ./.github/workflows/build-Win10-x64.yml
     if: needs.check.outputs.SHOULD_BUILD == 'yes'
     with:
-      arch: ${{ matrix.arch }}
-      gapps: ${{ matrix.gapps }}
-      root: ${{ matrix.root }}
+      arch: x64
+      root: none
+      gapps: MindTheGapps
+      amazonflag: --remove-amazon
+      magiskver: stable
+      devicemodel: redfin
       insider: ${{ needs.check.outputs.INSIDER_BUILD }}
+      wsamessage: ${{ needs.check.outputs.WSA_UPDATE_MESSAGE }}
     secrets: inherit
