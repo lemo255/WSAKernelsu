@@ -1,6 +1,6 @@
 name: Auto Build function (Use for call only)
 on:
- workflow_call:
+  workflow_call:
     inputs:
       arch:
         type: string
@@ -9,6 +9,14 @@ on:
       root:
         type: string
       insider:
+        type: string
+      magiskver:
+        type: string
+      devicemodel:
+        type: string
+      amazonflag:
+        type: string
+      wsamessage:
         type: string
 jobs:
   build:
@@ -56,7 +64,7 @@ jobs:
           fi
 
           mkdir -p download
-          ./scripts/build.sh --arch ${{ inputs.arch }} --release-type $RELEASE_TYPE --magisk-ver stable --gapps-brand ${{ inputs.gapps }} --root-sol ${{ inputs.root }} --custom-model redfin --remove-amazon --compress-format zip
+          ./scripts/build.sh --arch ${{ inputs.arch }} --release-type $RELEASE_TYPE ${{ inputs.magiskver }} --gapps-brand ${{ inputs.gapps }} --root-sol ${{ inputs.root }} --custom-model ${{ inputs.devicemodel }} ${{ inputs.amazonflag }} --compress-format zip
 
       - name: Pass to Windows 💸
         uses: actions/upload-artifact@v3
@@ -65,18 +73,29 @@ jobs:
           path: output
 
       - name: Prepare release tag 🏷️
-        id: date
+        id: releasetag
         run: |
-           if [[ -z "${{ inputs.insider }}" ]]; then
-              echo "date=$(date +'v%Y-%m-%d')" >> $GITHUB_OUTPUT
-           else
-              echo "date=WSA-Insider-Version" >> $GITHUB_OUTPUT
-           fi
+          if [[ -z "${{ inputs.insider }}" ]]; then
+            currentver=$(curl -s https://raw.githubusercontent.com/WellCodeIsDelicious/WSATest/update/wsa.appversion)
+            folderpath="/WSABuilds/Builds/Windows Subsystem For Android™ v$currentver/Windows 11/Windows 11 x86_64"
+            echo "DRIVE_FOLDER_PATH=$folderpath" >> $GITHUB_ENV
+            echo "WSA_TAG=Windows_11_$currentver" >> $GITHUB_ENV
+            echo "WSA_VER=$currentver" >> $GITHUB_ENV
+          else
+            currentver=$(curl -s https://raw.githubusercontent.com/WellCodeIsDelicious/WSATest/update/WIF.appversion)
+            folderpath="/WSABuilds/Builds/Windows Subsystem For Android™ v$currentver/Windows 11/Windows 11 x86_64"
+            echo "DRIVE_FOLDER_PATH=$folderpath" >> $GITHUB_ENV         
+            echo "WSA_TAG=Windows_11_$currentver" >> $GITHUB_ENV
+            echo "WSA_VER=$currentver" >> $GITHUB_ENV 
+          fi
 
     outputs:
       zipname: ${{ steps.wsa.outputs.artifact }}
       date: ${{ steps.date.outputs.date }}
       built: ${{ steps.wsa.outputs.built }}
+      tag: ${{ env.WSA_TAG }}
+      wsaver: ${{ env.WSA_VER }}
+      onedrivepath: ${{ env.DRIVE_FOLDER_PATH }}
 
   make-pri:
     name: Merge PRI resources
@@ -122,11 +141,22 @@ jobs:
         id: run
         run: ("hash=" + $(Get-FileHash -Path ${{ needs.build.outputs.zipname }}.7z -Algorithm SHA256).Hash.ToLower().ToString()) | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding UTF8 -Append
 
-      - name: Update build to release 🤌
+      - name: Setup rclone 🎚️
+        uses: AnimMouse/setup-rclone@v1.5.1
+        with:
+            rclone_config: ${{ secrets.RCLONE_CONFIG }}
+
+      - name: Upload build to OneDrive ⏫
+        run: |
+             rclone copy ${{ needs.build.outputs.zipname }}.7z OneDrive:${{ needs.build.outputs.onedrivepath }} --create-empty-src-dirs
+        env:
+             RCLONE_CONFIG_PASS: ${{ secrets.RCLONE_CONFIG_PASS }}
+
+      - name: Upload build to release 🤌
         uses: softprops/action-gh-release@v1
         with:
           files: ${{ needs.build.outputs.zipname }}.7z
           fail_on_unmatched_files: true
-          append_body: true
-          tag_name: ${{ needs.build.outputs.date }}
-          body: ${{ steps.run.outputs.hash }}  ${{ needs.build.outputs.zipname }}.7z
+          append_body: false
+          tag_name: ${{ needs.build.outputs.tag }}
+          token: ${{ secrets.GITHUB_TOKEN }}
